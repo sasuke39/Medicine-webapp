@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+
+<configuration>
+                <!--    配置环境    -->
+    <environments default="mysql">
+        <environment id="mysql">
+            <transactionManager type="JDBC"></transactionManager>
+            <dataSource type="POOLED">
+                <property name="driver" value="com.mysql.jdbc.Driver"/>
+                <property name="url" value="jdbc:mysql://localhost:3306/test?serverTimezone=UTC&amp;useUnicode=true&amp;characterEncoding=utf8&amp;useSSL=false"/>
+                <property name="username" value="root"/>
+                <property name="password" value="root"/>
+            </dataSource>
+        </environment>
+    </environments>
+
+
+                <!--    引入映射配置文件    -->
+    <mappers>
+                <!--    注解用class配置  xml配置文件用resource   -->
+<!--    class只能是单独的一个dao映射接口  而package 可以配置该包下的所有接口   -->
+<!--        <mapper class="cn.zxh.dao.AccountDao"></mapper>-->
+        <package name="cn.zxh.dao"/>
+    </mappers>
+
+
+</configuration>
