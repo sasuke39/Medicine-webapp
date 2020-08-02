@@ -20,5 +20,6 @@ public interface Med_UserService {
     public Boolean updateUser(@Param("user") Med_User user);
     public int ifExistIconUrl(String filename);
     public Med_User findOneUserById(Integer id);
+    public String findByPhone(String phone);
 
 }

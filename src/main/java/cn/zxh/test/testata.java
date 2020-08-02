@@ -62,11 +62,15 @@ public class testata {
 //        System.out.println(byName);
 //        Boolean aBoolean = mapper.updateUser(user);
 //        System.out.println(aBoolean);
-        if (mapper.ifExistIconUrl("111.jpg")==0){
-            System.out.println("NOT Exist");
-        }else {
-            System.out.println("Exist!");
-        }
+//        if (mapper.ifExistIconUrl("111.jpg")==0){
+//            System.out.println("NOT Exist");
+//        }else {
+//            System.out.println("Exist!");
+//        }
+//        Integer flag = mapper.findByName("testone");
+//        System.out.println(flag);
+        Med_User login = mapper.login("13111112222", "123123aa");
+        System.out.println(login);
 
 
     }
@@ -123,6 +127,7 @@ public class testata {
         user.setCity("北京");
         user.setSex("男");
         UserDao mapper = session.getMapper(UserDao.class);
+//        User test = mapper.findByName("test");
 //        mapper.newUser(user);
     }
 

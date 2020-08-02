@@ -5,6 +5,7 @@ import cn.zxh.domain.Med_User;
 import cn.zxh.domain.SimOrder;
 import cn.zxh.service.Med_OrderService;
 import cn.zxh.service.Med_UserService;
+import cn.zxh.utils.RedisClusterClient;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
@@ -46,6 +48,9 @@ public class MedUserController {
         return "medusershow";
     }
 
+    @Resource
+    private RedisClusterClient redisClusterClient;
+
     @RequestMapping("show1")
     @ResponseBody
     public JSONObject showMedUser() {
@@ -59,25 +64,25 @@ public class MedUserController {
     @ResponseBody
     public JSONObject login(@RequestParam(value = "phone") String phone, @RequestParam(value = "password") String password) {
         JSONObject jsonObject = new JSONObject();
-        if (phone!=null||password!=null|| !password.equals("")||!phone.equals("")){
-           Med_User login = med_userService.login(phone, password);
-           if (login != null) {
-               jsonObject.put("code", "200");
-               jsonObject.put("msg", "登陆成功");
-               jsonObject.put("Med_user", login);
+        if (phone != null || password != null || !password.equals("") || !phone.equals("")) {
+            Med_User login = med_userService.login(phone, password);
+            if (login != null) {
+                jsonObject.put("code", "200");
+                jsonObject.put("msg", "登陆成功");
+                jsonObject.put("Med_user", login);
 
-           } else {
-               jsonObject.put("code", "500");
-               jsonObject.put("msg", "登录失败");
-               jsonObject.put("Med_user", null);
-           }
-           return jsonObject;
-       }else {
-           jsonObject.put("code", "500");
-           jsonObject.put("msg", "登录失败 用户信息不嫩为空");
-           jsonObject.put("Med_user", null);
-       }
-       return jsonObject;
+            } else {
+                jsonObject.put("code", "500");
+                jsonObject.put("msg", "登录失败,手机号或密码错误！");
+                jsonObject.put("Med_user", null);
+            }
+            return jsonObject;
+        } else {
+            jsonObject.put("code", "500");
+            jsonObject.put("msg", "登录失败 用户信息不能为空");
+            jsonObject.put("Med_user", null);
+        }
+        return jsonObject;
 
     }
 
@@ -85,13 +90,17 @@ public class MedUserController {
     @ResponseBody
     public JSONObject register(String username, String phone, String password) {
         JSONObject regResult = new JSONObject();
-        if (med_userService.register(username, phone, password)) {
-            regResult.put("code", "200");
-            regResult.put("msg", "注册成功！");
+        if (med_userService.findByName(username) != null&&med_userService.findByPhone(phone)!=null) {
+            if (med_userService.register(username, phone, password)) {
+                regResult.put("code", "200");
+                regResult.put("msg", "注册成功！");
+            } else {
+                regResult.put("code", "500");
+                regResult.put("msg", "注册失败！");
+            }
         } else {
             regResult.put("code", "500");
-            regResult.put("msg", "注册失败！");
-
+            regResult.put("msg", "该用户名或手机号已注册！");
         }
         return regResult;
     }
@@ -100,12 +109,12 @@ public class MedUserController {
     @ResponseBody
     public String newMedUser(Med_User user) {
         user.setCreateTime(gettimestr());
-        if (med_userService.findByName(user.getUsername())==null){
-            if (med_userService.newMedUser(user)){
+        if (med_userService.findByName(user.getUsername()) == null) {
+            if (med_userService.newMedUser(user)) {
                 return "1";
-            }else
+            } else
                 return "0";
-        }else return "注册失败,您注册的用户名" + user.getUsername() + "已经注册，请换个用户名！";
+        } else return "注册失败,您注册的用户名" + user.getUsername() + "已经注册，请换个用户名！";
 
     }
 
@@ -131,17 +140,25 @@ public class MedUserController {
         int id = Integer.parseInt(request.getParameter("id"));
         System.out.println(id);
 
+
         /**
          * 调用业务层代码，封装json数据
          */
-        if (med_userService.findOneById(id) != null) {
-            JSONObject oneById = med_userService.findOneById(id);
-            /**
-             * 返回json数组
-             */
-            response.getWriter().write(String.valueOf(oneById));
+        Object UserById = redisClusterClient.get("User:id:" + id);
+        if (UserById==null) {
+            if (med_userService.findOneById(id) != null) {
+                JSONObject oneById = med_userService.findOneById(id);
+                /**
+                 * 返回json数组
+                 */
+                redisClusterClient.put("User:id:"+id,oneById);
+                response.getWriter().write(String.valueOf(oneById));
 
-        } else response.getWriter().write("null");
+            } else response.getWriter().write("null");
+
+        }else {
+            response.getWriter().write(String.valueOf(UserById));
+        }
 
     }
 
@@ -153,23 +170,30 @@ public class MedUserController {
          * 已开启过滤器设置编码
          */
         System.out.println("表现层！showByLimit!!!!");
+        List<Med_User> objects =null;
 //        System.out.println(limit+page);
         /**
          * 调用业务层代码，封装json数据
          */
-
-        List<Med_User> objects = med_userService.findAllLimit(((page - 1) * limit), limit);
-        System.out.println(objects);
+        Object UserByLimit = redisClusterClient.get("MedUser:" + page + ":" + limit);
+        if (UserByLimit ==null) {
+            objects = med_userService.findAllLimit(((page - 1) * limit), limit);
+            redisClusterClient.put("MedUser:" + page + ":" + limit,objects);
+            System.out.println(objects);
+            return objects;
+        }else {
+            return (List<Med_User>)UserByLimit;
+        }
 
         /**
          * 返回json数组
          */
-        return objects;
+
 
     }
 
     @RequestMapping("getallOrder")
-    public void all(String uid,HttpServletResponse response) throws IOException {
+    public void all(String uid, HttpServletResponse response) throws IOException {
         System.out.println(uid);
         List<Med_Order> ordersByUid = med_orderService.findOrdersByUid(Integer.valueOf(uid));
         jsonArray.addAll(ordersByUid);
@@ -178,6 +202,7 @@ public class MedUserController {
         jsonArray.clear();
 
     }
+
     @RequestMapping("/deleteById")
     public void deleteById(String id, HttpServletResponse response) throws Exception {
         /**
@@ -189,7 +214,7 @@ public class MedUserController {
          */
         int deleteById = med_userService.deleteById(Integer.valueOf(id));
         System.out.println(deleteById);
-        if (deleteById==1) {
+        if (deleteById == 1) {
             response.getWriter().write("1");
         } else {
             response.getWriter().write("0");
@@ -203,19 +228,20 @@ public class MedUserController {
     }
 
     @RequestMapping("updateMedUser")
-    public String updateMedUser(String uid){
+    public String updateMedUser(String uid) {
         int id = Integer.parseInt(uid);
-        System.out.println("从子页面得到的ID ："+id);
+        System.out.println("从子页面得到的ID ：" + id);
         return "changeMedUser";
     }
+
     @RequestMapping("changeMedUser")
-    public String changeMedUser(Med_User user){
-        System.out.println("更改用户的信息:"+user);
-        if (med_userService.findByName(user.getUsername())==null){
-            if (med_userService.updateUser(user)){
+    public String changeMedUser(Med_User user) {
+        System.out.println("更改用户的信息:" + user);
+        if (med_userService.findByName(user.getUsername()) == null) {
+            if (med_userService.updateUser(user)) {
                 return "success";
-            }else return "fail";
-        }else return "fail";
+            } else return "fail";
+        } else return "fail";
     }
 
     @RequestMapping("getOrderByUid")
@@ -224,7 +250,7 @@ public class MedUserController {
          * 获取参数
          */
         int uid = Integer.parseInt(request.getParameter("uid"));
-        System.out.println("从子页面得到的uid："+uid);
+        System.out.println("从子页面得到的uid：" + uid);
         return "userOrder";
 
     }
@@ -234,31 +260,31 @@ public class MedUserController {
     /**
      * 这里@RequestParam(value = "file")一定加上 value =
      */
-    public JSONObject uploadImg(@RequestParam(value = "file") MultipartFile file, @RequestParam(value = "userId")String userId) {
+    public JSONObject uploadImg(@RequestParam(value = "file") MultipartFile file, @RequestParam(value = "userId") String userId) {
 
 
         /**
          * 获取文件名划分出最后一个后缀名
          */
-        System.out.println("进行该操作的UserID:"+userId);
+        System.out.println("进行该操作的UserID:" + userId);
         JSONObject jsonObject = new JSONObject();
-        String lastname="jpg";
+        String lastname = "jpg";
         String originalFilename = file.getOriginalFilename();
         String[] strings = originalFilename.split("\\.");
-        for (int i = 0;i<strings.length;i++){
-            if (i+1==strings.length){
-                lastname=strings[i];
+        for (int i = 0; i < strings.length; i++) {
+            if (i + 1 == strings.length) {
+                lastname = strings[i];
             }
         }
 
         String fileName = null;
-        boolean ifname =false;
+        boolean ifname = false;
         while (!ifname) {
-            fileName=getUUID();
-            fileName =fileName+ "."+lastname;
-            if (med_userService.ifExistIconUrl(fileName)==0){
+            fileName = getUUID();
+            fileName = fileName + "." + lastname;
+            if (med_userService.ifExistIconUrl(fileName) == 0) {
                 System.out.println("不重名！");
-                ifname =true;
+                ifname = true;
             }
         }
 
@@ -271,33 +297,29 @@ public class MedUserController {
             uploadFile(file.getBytes(), "F:/Program Files (x86)/apache-tomcat-9.0.31/webapps/Medapp/user_icon", fileName);
 //            System.out.println(file);
             Med_User oneUserById = med_userService.findOneUserById(Integer.valueOf(userId));
-            if (oneUserById!=null) {
+            if (oneUserById != null) {
                 oneUserById.setUser_icon(fileName);
                 if (med_userService.updateUser(oneUserById)) {
                     jsonObject.put("msg", "更新用户信息成功！");
-                    jsonObject.put("code","200");
+                    jsonObject.put("code", "200");
                 } else {
                     jsonObject.put("code", "501");
                     jsonObject.put("msg", "更新失败！");
                 }
                 System.out.println(fileName);
-            }else {
+            } else {
                 jsonObject.put("msg", "查无此人！");
-                jsonObject.put("code","502");
+                jsonObject.put("code", "502");
             }
             return jsonObject;
 
         } catch (Exception e) {
             e.printStackTrace();
-            jsonObject.put("msg","用户更新失败！");
-            jsonObject.put("code","501");
+            jsonObject.put("msg", "用户更新失败！");
+            jsonObject.put("code", "501");
             return jsonObject;
 
         }
-
-
-
-
 
 
     }
@@ -321,10 +343,6 @@ public class MedUserController {
         out.close();
 
     }
-
-
-
-
 
 
 //    @ResponseBody //返回json数据

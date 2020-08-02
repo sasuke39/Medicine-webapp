@@ -54,4 +54,6 @@ public interface Med_UserDao {
     @Select("select * from meduser where id=#{id}")
     public Med_User findOneUserById(Integer id);
 
+    @Select("select phoneNumber from meduser where phoneNumber = #{phone}")
+    public String findByPhone(String phone);
 }

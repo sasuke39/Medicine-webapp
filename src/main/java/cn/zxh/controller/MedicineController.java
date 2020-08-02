@@ -4,24 +4,29 @@ import cn.zxh.domain.Med_Order;
 import cn.zxh.domain.Medicine;
 import cn.zxh.service.Med_OrderService;
 import cn.zxh.service.MedicineService;
+import cn.zxh.utils.RedisClusterClient;
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.ModelAndView;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Controller
@@ -33,6 +38,8 @@ public class MedicineController {
 
     String fileName = null;
 
+    @Resource
+    private RedisClusterClient redisClusterClient;
     @Autowired
     @Qualifier(value = "MedicineService")
     private MedicineService medicineService;
@@ -40,6 +47,15 @@ public class MedicineController {
     @Autowired
     @Qualifier(value = "MedOrderService")
     private Med_OrderService med_orderService;
+
+    @ResponseBody
+    @RequestMapping("/test")
+    public String test(){
+        redisClusterClient.put("name","zxh000");
+        Object name = redisClusterClient.get("name");
+        System.out.println(name.toString());
+        return name.toString();
+    }
 
     @RequestMapping("/up")
     public String findAll(Model model) {
@@ -67,12 +83,22 @@ public class MedicineController {
     @RequestMapping("/getOrderJson")
     public JSONObject getOrderJson(){
         JSONObject jsonObject = new JSONObject();
-        List<Med_Order> med_orderServiceAll = med_orderService.findAll();
-        jsonObject.put("code","200");
-        jsonObject.put("msg","get successfully!");
-        jsonObject.put("med_order",med_orderServiceAll);
+        Object orderjson = redisClusterClient.get("orderjson");
+        if (orderjson==null) {
 
-        return jsonObject;
+            List<Med_Order> med_orderServiceAll = med_orderService.findAll();
+            redisClusterClient.put("orderjson",med_orderServiceAll);
+            jsonObject.put("code", "200");
+            jsonObject.put("msg", "get successfully!");
+            jsonObject.put("med_order", med_orderServiceAll);
+            return jsonObject;
+        }
+        else {
+            jsonObject.put("code", "200");
+            jsonObject.put("msg", "get successfully!");
+            jsonObject.put("med_order", orderjson);
+            return jsonObject;
+        }
     }
 
     @ResponseBody
@@ -97,6 +123,7 @@ public class MedicineController {
         jsonObject.put("code",200);
         jsonObject.put("msg","");
         return jsonObject;
+
     }
 
 
@@ -279,6 +306,13 @@ public class MedicineController {
     public JSONObject searchMed(String searchWord){
         System.out.println(searchWord);
         JSONObject jsonObject = new JSONObject();
+//        redisClusterClient.get("MedicineList:word:"+searchWord:id
+        boolean existMember = redisClusterClient.ifExistMember("SearchWord", searchWord);
+        if (existMember){
+            redisClusterClient.IncrMember("SearchWord",searchWord);
+        }else {
+            redisClusterClient.putSortedSet("SearchWord",10.0,searchWord);
+        }
         if (searchWord!=null) {
             List<Medicine> medicines = medicineService.SearchMed(searchWord);
             if (medicines!=null) {
@@ -297,6 +331,22 @@ public class MedicineController {
             return jsonObject;
         }
     }
+
+
+    @RequestMapping("/testset")
+    @ResponseBody
+    public JSONObject testset(){
+        Set<ZSetOperations.TypedTuple<String>> searchWord = redisClusterClient.getSortedSet("SearchWord");
+//       return "test";
+
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("code",200);
+        jsonObject.put("msg","success");
+        jsonObject.put("word",searchWord);
+        return jsonObject;
+    }
+
+
 
 
 }

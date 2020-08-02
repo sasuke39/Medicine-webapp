@@ -70,4 +70,9 @@ public class Med_UserServiceImpl implements Med_UserService {
     public Med_User findOneUserById(Integer id) {
         return med_userDao.findOneUserById(id);
     }
+
+    @Override
+    public String findByPhone(String phone) {
+        return med_userDao.findByPhone(phone);
+    }
 }
